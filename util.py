@@ -39,11 +39,20 @@ def set_log_level(name):
 def log(tag, msg, level="info"):
     if _LEVELS.get(level, 20) < _log_level:
         return
-    print("[%8.1f] %-7s %s: %s" % (uptime_s(), level.upper(), tag, msg))
+    try:
+        print("[%8.1f] %-7s %s: %s" % (uptime_s(), level.upper(), tag, msg))
+    except Exception:
+        pass
 
 
 def log_exc(tag, msg, exc):
     log(tag, "%s: %s" % (msg, exc), "error")
+    try:
+        with open("error_log.txt", "a") as f:
+            f.write("[%8.1f] ERROR %s: %s: %s\n" % (uptime_s(), tag, msg, exc))
+            sys.print_exception(exc, f)
+    except Exception:
+        pass
     try:
         sys.print_exception(exc)
     except Exception:

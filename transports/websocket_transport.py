@@ -71,89 +71,28 @@ class WebSocketConnection:
 
     async def send_json(self, data):
         """
-        Sends JSON payload. For small payloads, uses fast-path serialization.
-        For large payloads (> 1.5 KB), streams chunks directly to the socket
-        without allocating large contiguous buffers on RP2040 heap.
+        Sends JSON payload safely to client.
+        Uses gc.collect() to prevent heap fragmentation.
         """
         if self.closed:
             return
 
         gc.collect()
-
-        # Fast path for small payloads (< 1500 chars)
         try:
             dumped = json.dumps(data)
-            if len(dumped) < 1500:
-                payload = dumped.encode("utf-8")
-                dumped = None
-                await self.send_frame(OP_TEXT, payload)
-                payload = None
-                gc.collect()
-                return
-            dumped = None
         except MemoryError:
             gc.collect()
-        except Exception:
-            pass
+            dumped = json.dumps(data)
 
-        # Streaming path for large payloads (avoids MemoryError)
         try:
-            import uio as io
-        except ImportError:
-            import io
-        StreamBase = getattr(io, "IOBase", object)
+            payload = dumped.encode("utf-8")
+        except MemoryError:
+            gc.collect()
+            payload = dumped.encode("utf-8")
+        dumped = None
 
-        class _Counter(StreamBase):
-            def __init__(self):
-                self.count = 0
-            def write(self, s):
-                n = len(s) if isinstance(s, (bytes, bytearray)) else len(s.encode("utf-8"))
-                self.count += n
-                return n
-
-        counter = _Counter()
-        json.dump(data, counter)
-        length = counter.count
-        del counter
-
-        header = bytearray([0x80 | (OP_TEXT & 0x0F)])
-        if length <= 125:
-            header.append(length)
-        elif length <= 65535:
-            header.append(126)
-            header.extend(struct.pack(">H", length))
-        else:
-            header.append(127)
-            header.extend(struct.pack(">Q", length))
-
-        class _ChunkWriter(StreamBase):
-            def __init__(self, writer, chunk_size=256):
-                self.writer = writer
-                self.chunk_size = chunk_size
-                self.buf = bytearray()
-            def write(self, s):
-                b = s if isinstance(s, (bytes, bytearray)) else s.encode("utf-8")
-                self.buf.extend(b)
-                if len(self.buf) >= self.chunk_size:
-                    self.writer.write(self.buf)
-                    self.buf = bytearray()
-                return len(s)
-            def flush(self):
-                if self.buf:
-                    self.writer.write(self.buf)
-                    self.buf = bytearray()
-
-        async with self._write_lock:
-            try:
-                self.writer.write(header)
-                chunk_w = _ChunkWriter(self.writer, chunk_size=256)
-                json.dump(data, chunk_w)
-                chunk_w.flush()
-                del chunk_w
-                await self.writer.drain()
-            except Exception:
-                self.closed = True
-
+        await self.send_frame(OP_TEXT, payload)
+        payload = None
         gc.collect()
 
     async def read_frame(self):

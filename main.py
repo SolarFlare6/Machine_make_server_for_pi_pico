@@ -190,21 +190,6 @@ async def console_loop(pairing_manager, trust_store, session_manager, identity, 
     except Exception:
         poll = None
 
-    banner = (
-        "\n" + "=" * 60 + "\n"
-        "  MACHINE MAKE PICO W DEVICE SERVER CONSOLE\n"
-        "  Commands:\n"
-        "    qr [name]    - Display QR pairing code in terminal\n"
-        "    y / n        - Approve or deny pending pairing request\n"
-        "    devices      - List paired clients & active sessions\n"
-        "    status       - Show device status and runtime info\n"
-        "    scan         - Rescan I2C buses\n"
-        "    reboot       - Reboot microcontroller\n"
-        "    help         - Show available commands\n"
-        + "=" * 60 + "\n"
-    )
-    print(banner)
-
     line_buf = ""
     while True:
         try:
@@ -222,11 +207,11 @@ async def console_loop(pairing_manager, trust_store, session_manager, identity, 
                             )
                     elif ch:
                         line_buf += ch
-            await asyncio.sleep_ms(100)
+            await asyncio.sleep_ms(250)
         except asyncio.CancelledError:
             break
         except Exception:
-            await asyncio.sleep_ms(200)
+            await asyncio.sleep_ms(500)
 
 
 async def _process_console_command(cmd_line, pairing_manager, trust_store,
@@ -358,6 +343,16 @@ async def main():
 
     if wifi_cfg.get("enabled", True):
         await wifi_mgr.start()
+        if wifi_mgr.is_connected:
+            mode = wifi_mgr.status().get("mode")
+            if mode == "ap":
+                util.log("main", "Wi-Fi running in AP mode; SSID: %s" % config.wifi.get("ap_ssid", "MachineMake-Pico"))
+            else:
+                util.log("main", "Wi-Fi connected to network! Blinking LED repeatedly for 3s...")
+            pico_controller.blink_connected(duration_s=3.0, interval_ms=150)
+        else:
+            pico_controller.flash_alert()
+
         if config.system.get("ntp_sync", True):
             asyncio.create_task(wifi_mgr.sync_ntp())
 
@@ -442,3 +437,17 @@ if __name__ == "__main__":
     except Exception as exc:
         print("\n[main] Fatal server error:")
         sys.print_exception(exc)
+        try:
+            with open("crash_log.txt", "w") as f:
+                sys.print_exception(exc, f)
+        except Exception:
+            pass
+        # Flash the LED rapidly at 10 Hz to visibly indicate crash on standalone power
+        try:
+            from machine import Pin
+            err_led = Pin("LED", Pin.OUT)
+            while True:
+                err_led.toggle()
+                time.sleep_ms(100)
+        except Exception:
+            pass

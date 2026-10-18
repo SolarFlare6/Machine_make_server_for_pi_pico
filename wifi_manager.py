@@ -55,17 +55,13 @@ class WiFiManager:
     async def start(self):
         """Attempts connection to configured networks; falls back to AP mode if configured."""
         try:
+            import rp2
             country = self._cfg.get("country", "DE")
-            network.country(country)
+            rp2.country(country)
         except Exception:
             pass
 
-        # Disable power saving for low WebSocket latency
-        if not self._cfg.get("power_save", False):
-            try:
-                self._wlan_sta.config(pm=0xa11140)  # PM_PERFORMANCE
-            except Exception:
-                pass
+        self._wlan_sta.active(True)
 
         try:
             self._wlan_sta.config(hostname=self.hostname)
@@ -83,14 +79,16 @@ class WiFiManager:
                 continue
 
             util.log("wifi", "Connecting to Wi-Fi SSID '%s'..." % ssid)
-            self._wlan_sta.active(True)
-            self._wlan_sta.connect(ssid, password)
+            try:
+                self._wlan_sta.connect(ssid, password)
+            except Exception as conn_err:
+                util.log("wifi", "Connect call error: %s" % conn_err, "warning")
 
             start_t = time.ticks_ms()
             while not self._wlan_sta.isconnected():
                 if time.ticks_diff(time.ticks_ms(), start_t) > timeout_s * 1000:
                     break
-                await asyncio.sleep_ms(500)
+                await asyncio.sleep_ms(300)
 
             if self._wlan_sta.isconnected():
                 self._connected = True
@@ -99,11 +97,6 @@ class WiFiManager:
                 return True
             else:
                 util.log("wifi", "Failed to connect to '%s'" % ssid, "warning")
-                try:
-                    self._wlan_sta.disconnect()
-                    self._wlan_sta.active(False)
-                except Exception:
-                    pass
 
         # 2. Check AP Fallback
         if self._cfg.get("ap_fallback", True):

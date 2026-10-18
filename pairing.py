@@ -106,21 +106,24 @@ class PairingManager:
         payload_json = json.dumps(payload)
 
         if display_terminal:
-            line = "=" * 50
-            print("\n" + line)
-            print("         MACHINE MAKE - DCP QR PAIRING")
-            print(line)
-            print("Device:       %s (%s)" % (payload["name"], payload["device_id"]))
-            print("Profile:      %s" % payload["profile"])
-            print("Pairing Code: %s" % code)
-            print("Target:       %s:%s" % (payload["host"], self._port))
-            print("BLE Service:  %s" % BLE_DCP_SERVICE_UUID)
-            print("Expires In:   %d seconds" % ttl)
-            print("-" * 50)
-            print("Render the QR on your PC:  python host_tools/make_qr.py --port <COMx>")
-            print("or paste the line below into  python host_tools/make_qr.py --json '<payload>'")
-            print("QR_PAYLOAD:" + payload_json)
-            print(line + "\n")
+            try:
+                line = "=" * 50
+                print("\n" + line)
+                print("         MACHINE MAKE - DCP QR PAIRING")
+                print(line)
+                print("Device:       %s (%s)" % (payload["name"], payload["device_id"]))
+                print("Profile:      %s" % payload["profile"])
+                print("Pairing Code: %s" % code)
+                print("Target:       %s:%s" % (payload["host"], self._port))
+                print("BLE Service:  %s" % BLE_DCP_SERVICE_UUID)
+                print("Expires In:   %d seconds" % ttl)
+                print("-" * 50)
+                print("Render the QR on your PC:  python host_tools/make_qr.py --port <COMx>")
+                print("or paste the line below into  python host_tools/make_qr.py --json '<payload>'")
+                print("QR_PAYLOAD:" + payload_json)
+                print(line + "\n")
+            except Exception:
+                pass
 
         return {"approved": True, "pairing_code": code, "payload": payload,
                 "payload_json": payload_json, "expires_in_s": ttl}
@@ -189,19 +192,22 @@ class PairingManager:
         req = PairingRequest(util.random_code(6), client_id, client_name, method)
         self._requests[req.request_id] = req
 
-        line = "=" * 32
-        print("\n" + line)
-        print("       DCP PAIRING REQUEST")
-        print(line)
-        print("Device: %s" % client_name)
-        print("Method: %s" % method)
-        print("Request ID: %s\n" % req.request_id)
-        print("Allow this device?")
-        print("  [Y] Yes  -> type 'y' + Enter%s" %
-              (" or press BOOTSEL" if self._settings.get("bootsel_confirm", True) else ""))
-        print("  [N] No   -> type 'n' + Enter")
-        print("Expires in %d s" % (self._request_ttl_ms // 1000))
-        print(line + "\n")
+        try:
+            line = "=" * 32
+            print("\n" + line)
+            print("       DCP PAIRING REQUEST")
+            print(line)
+            print("Device: %s" % client_name)
+            print("Method: %s" % method)
+            print("Request ID: %s\n" % req.request_id)
+            print("Allow this device?")
+            print("  [Y] Yes  -> type 'y' + Enter%s" %
+                  (" or press BOOTSEL" if self._settings.get("bootsel_confirm", True) else ""))
+            print("  [N] No   -> type 'n' + Enter")
+            print("Expires in %d s" % (self._request_ttl_ms // 1000))
+            print(line + "\n")
+        except Exception:
+            pass
 
         try:
             await asyncio.wait_for(req.event.wait(), self._request_ttl_ms / 1000 + 1)

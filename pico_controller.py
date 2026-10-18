@@ -233,6 +233,21 @@ class PicoController:
         self._set_led_hw(self.led_state)
         return {"status": "completed", "times": times, "interval_ms": interval_ms}
 
+    def blink_connected(self, duration_s=3.0, interval_ms=150):
+        """Blinks the onboard LED repeatedly for `duration_s` (default 3 seconds), then turns it off."""
+        async def _run():
+            self.stop_animation(restore=False)
+            end_t = time.ticks_add(time.ticks_ms(), int(duration_s * 1000))
+            state = False
+            while time.ticks_diff(end_t, time.ticks_ms()) > 0:
+                state = not state
+                self._set_led_hw(state)
+                await asyncio.sleep_ms(interval_ms)
+            self._set_led_hw(False)
+            self.led_state = False
+
+        return asyncio.create_task(_run())
+
     # ------------------------------------------------------------------
     # Sensors / power
     # ------------------------------------------------------------------
